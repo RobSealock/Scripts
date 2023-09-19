@@ -1,0 +1,39 @@
+1. Modify of the current user registry
+
+1A. Using Powershell, get the current users registry key ID (S-1-5-21-XXX)
+
+Get-ItemProperty -path  "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\*" | select ProfileImagePath, PSChildName
+
+1B. Add to the HKCU Trusted Sites and Authentication for %company%.sharepiont.com via an Admin prompt
+(chagne SID to correct User from step 1A)
+
+Windows Registry Editor Version 5.00
+
+[HKEY_USERS\S-1-5-21-XXX\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings]
+[HKEY_USERS\S-1-5-21-XXX\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap]
+[HKEY_USERS\S-1-5-21-XXX\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains]
+[HKEY_USERS\S-1-5-21-XXX\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains\sharepoint.com]
+"http"=dword:00000002
+"https"=dword:00000002
+"*"=dword:00000000
+[HKEY_USERS\S-1-5-21-XXX\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains\sharepoint.com\%company%]
+"https"=dword:00000002
+"*"=dword:00000002
+"1A00"=dword:00000000
+[HKEY_USERS\S-1-5-21-XXX\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMapKey]
+"*.%company%.sharepoint.com"=2
+
+2. Go to the SPO site from your browser, and go to the Documents folder
+3. click "Return to classic Sharepoint"
+4. Copy the URL
+	Ie: https://%company%.sharepoint.com/sites/ProcessTechnologyPMO-DigitalandITTechnicalIntegrationLT/Shared%20Documents/Forms/AllItems.aspx?RootFolder=%2Fsites%2FProcessTechnologyPMO%2DDigitalandITTechnicalIntegrationLT%2FShared%20Documents%2FDigital%20and%20IT%20Technical%20Integration%20LT&FolderCTID=0x012000A31AC6ECA5B2DE4592828DA3111B2264&View=%7B24A85B0F%2D831D%2D4A44%2DA904%2D22C4E3E5B938%7D
+5. Modify the URL to remove everything after CTID
+	Ie: https://%company%.sharepoint.com/sites/ProcessTechnologyPMO-DigitalandITTechnicalIntegrationLT/Shared%20Documents/Forms/AllItems.aspx?RootFolder=%2Fsites%2FProcessTechnologyPMO%2DDigitalandITTechnicalIntegrationLT%2FShared%20Documents%2FDigital%20and%20IT%20Technical%20Integration%20LT&Folder
+6.  Map a Drive with this URL (restore connection)
+
+
+X:        \\%company%.sharepoint.com@SSL\sites\ProcessTechnologyPMO-DigitalandITTechnicalIntegrationLT\Shared Documents
+
+net use /persistent:Yes x: "\\%company%.sharepoint.com@SSL\sites\ProcessTechnologyPMO-DigitalandITTechnicalIntegrationLT\Shared Documents"
+$a = New-Object -ComObject shell.application
+$a.NameSpace( "X:\" ).self.name = "SPO"
