@@ -1,0 +1,20 @@
+while ($true) { 
+    $processes = Get-Process -Name powershell
+
+    foreach ($process in $processes) {
+        $processId = $process.Id
+        Write-Host "Sending Enter key to PowerShell process with ID $processId"
+
+        # Start a new PowerShell instance to send the Enter key
+        $sendEnterScript = {
+            param($processId)
+            $wshell = New-Object -ComObject wscript.shell
+            $wshell.AppActivate($processId)
+            $wshell.SendKeys('{ENTER}')
+            start-sleep 1
+        }
+        Start-Job -ScriptBlock $sendEnterScript -ArgumentList $processId | Wait-Job | out-Null
+        Get-Job | Remove-Job
+    }
+    Start-Sleep -Seconds 60
+}
