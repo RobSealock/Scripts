@@ -1,0 +1,49 @@
+#This Script will check for system online (via ping), if online then check for new VPN file and if not present rename current files and copy new VPN files
+#
+# Infile.txt = Used for import of system
+# Record.txt = Results of ping/file check
+# OutFile.txt = Systems to be actioned
+# OutFile2.txt = cleanup
+# Final.txt = Outcome of action and check
+# Errors.txt = like it sounds like
+#
+try{operation}catch{$_ | out-file -append .\errors.txt}
+#
+$comps = gc InFile.txt
+#
+#Ping Test and Record Results of VPN File check
+foreach ($obj in $comps)
+{
+if(Test-Connection $obj -Count 1 -TimeToLive 135) {
+$UNC = '\\' + $obj + '\C$\ProgramData\Cisco\Cisco AnyConnect Secure Mobility Client\Profile\anyconnect_suncor_profile.xml'
+$Check = test-path $UNC
+$Answer = $obj + ',' + $Check
+$Answer| Out-File -append -FilePath .\Record.txt
+}
+}
+# Separate out systems that dont have VPN files
+Select-String -path .\Record.txt -pattern False | select line | Out-File -append -FilePath .\OutFile.txt
+#
+# Separate data
+gc .\OutFile.txt | select-object -skip 3 | Out-File -append -FilePath .\OutFile2.txt
+$headers = 1..10
+$Action = import-csv .\OutFile2.txt -header $headers
+#
+# Run the rename and copy
+# Checks again for correct file and records
+Foreach ($NewObj in $Action.1) {
+$NewUNC1 = '\\' + $NewObj + '\C$\ProgramData\Cisco\Cisco AnyConnect Secure Mobility Client\Profile\'
+$NewUNC2 = '\\' + $NewObj + '\C$\ProgramData\Cisco\Cisco AnyConnect Secure Mobility Client\Profile\MgmtTun'
+Get-ChildItem *.xml -path $NewUNC1 | Rename-Item -NewName { $_.Name -replace '\.xml','.tmp' }
+Get-ChildItem *.xsd -path $NewUNC1 | Rename-Item -NewName { $_.Name -replace '\.xsd','.tmp' }
+Get-ChildItem *.xsd -path $NewUNC2 | Rename-Item -NewName { $_.Name -replace '\.xsd','.tmp' }
+Get-ChildItem *.xml -path $NewUNC2 | Rename-Item -NewName { $_.Name -replace '\.xml','.tmp' }
+cp .\anyconnect_suncor_profile.xml $NewUNC1
+cp .\AnyConnectProfile.xsd $NewUNC2
+$UNCCHK1 = '\\' + $Newobj + '\C$\ProgramData\Cisco\Cisco AnyConnect Secure Mobility Client\Profile\anyconnect_suncor_profile.xml'
+$UNCCHK2 = '\\' + $Newobj + '\C$\ProgramData\Cisco\Cisco AnyConnect Secure Mobility Client\Profile\MgmtTun\AnyConnectProfile.xsd'
+$CheckAgain1 = test-path $UNCCHK1
+$CheckAgain2 = test-path $UNCCHK2
+$AnswerFinal = $NewObj + ',' + $CheckAgain1 + ',' + $CheckAgain2
+$AnswerFinal | Out-File -append -FilePath .\Final.txt
+}
