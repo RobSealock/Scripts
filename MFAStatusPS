@@ -1,0 +1,13 @@
+# Export MFA status of User
+# Create filename based on WHAT and Date/Time
+$filename = "MFA_Check" + "_" + (Get-Date -Format "yyyy-MM-dd") + "_" + (Get-Date -Format "HH-mm") + ".txt"
+# Import and remove "" from export of Users who have Comp* in Company Name
+# Using export file to allow for other scripts to consume info
+$RAW= gc 'C#\Exports\UPN_Export.txt'
+$usrlist = $RAW.Trim('"')
+# Connect to Tenant
+Connect-MsolService
+foreach ($User in $Usrlist) 
+{
+Get-MsolUser -UserPrincipalName $user | select UserPrincipalName,@{N="MFA Status"; E={ if( $_.StrongAuthenticationMethods.MethodType){$true} else {$false}}} | Export-Csv -NoTypeInformation -Append  c#\exports\$filename
+}
