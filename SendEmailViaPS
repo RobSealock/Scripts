@@ -1,0 +1,83 @@
+### V.1
+########################
+$t0=Get-Date -f MMddyyHHMMss
+$log="\\%PathHere%\SendMail\SendMailLog-"+$t0+".log"
+$file= "\\%PathHere\Imports\Email_2_Users\UserList.csv"
+#
+if (test-path $file){$csv = Import-Csv $file}
+$param=@{
+SmtpServer='smtp.server.here'
+From='EmailFrom@Here'
+Subject="ACTION Required: Place Action Required here"
+Priority='High'
+Attachments = '\\%PathHere\Imports\Email_2_Users\AttachmentNameHere.pdf'
+Body=""
+}
+#
+$body = @'
+<p><span style="color: #ff0000;"><strong>PLEASE READ - It is important that you take specific actions as soon as possible.</strong></span></p>
+<p>Hello {0},</p>
+<p>Some words here about the following time and a variable to replace based on week value in csv<strong><span style="text-decoration: underline;"> {1} week(s)</span></strong>. Some more txt here.</p>
+<p><br />New Paragraph and txt.</p>
+<p>Thank you very much,</p>
+<p>Some txt</p>
+'@
+#
+#
+#
+############################
+if (!$csv){write-host "WRN: No input file detected. Cannot proceed." -f yellow;break}
+#
+ForEach ($item in $CSV){
+$upn=$item.user
+$week=$item.week
+if (!$week){$week=1}
+if ($week -gt 3){$week=3}
+$t=Get-Date -f 'yyyy-MM-dd:::HH:mm:ss'
+$msg="INFO: Processing user {0}  -- {1}" -f $upn,$t
+$msg|ac $log
+write-host $msg
+### User Validations
+$u=get-aduser -f {userprincipalname -eq $upn} -prop mail
+if (!$u){
+$msg="ERR: User $upn not valid"
+$msg|ac $log
+write-host $msg -f red
+continue
+}
+if ($u.enabled -eq $false){
+$msg="ERR: User $upn is disabled."
+$msg|ac $log
+write-host $msg -f red
+continue
+}
+### End User Validations
+### Process
+switch ($week)
+{
+1 {
+$param.body=$body -f $u.givenname,$week
+Send-MailMessage @param -To $upn -BodyAsHtml
+$msg="INFO: Message sent to {0}" -f $upn
+$msg|ac $log
+write-host $msg -f darkgray
+}
+2 {
+$param.body=$body -f $u.givenname,$week
+$cc = (get-aduser (Get-ADUser -f {userprincipalname -eq $upn} -prop manager).manager).userprincipalname
+Send-MailMessage @param -To $upn -cc $cc -BodyAsHtml
+$msg="INFO: Message sent to {0} and {1}" -f $upn,$cc
+$msg|ac $log
+write-host $msg -f darkgray
+}
+3 {
+$param.body=$body -f $u.givenname,$week
+$cc = (get-aduser (Get-ADUser -f {userprincipalname -eq $upn} -prop manager).manager).userprincipalname
+$cc2 = (get-aduser (Get-ADUser -f {userprincipalname -eq $cc} -prop manager).manager).userprincipalname
+Send-MailMessage @param -To $upn -cc $cc,$cc2 -BodyAsHtml
+$msg="INFO: Message sent to {0} , {1} and {2}" -f $upn,$cc,$cc2
+$msg|ac $log
+write-host $msg -f darkgray
+}
+}
+}
