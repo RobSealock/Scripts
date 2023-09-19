@@ -1,0 +1,22 @@
+#Export of Last User Azure Logon
+#Create filename based on WHAT and Date/Time
+$filename = "USERS_AZURE" + "_" + (Get-Date -Format "yyyy-MM-dd") + "_" + (Get-Date -Format "HH-mm") + ".txt"
+# Import and remove "" from export of Users who have Comp* in Company Name
+# Using export file to allow for other scripts to consume info
+$RawUsers = gc C:\Exports\Comp_UPN_Export.txt
+$usrlist = $RawUsers.Trim('"')
+# Connect to Azure w/Preview Module
+AzureADPreview\Connect-AzureAD
+# The Get-AzureADAuditSignInLogs CMD tosses error#Too Many Requests if ran without pause
+# Using 2.5 sec pause between to avoid throttling
+$UserCount = 0
+foreach ($User in $Usrlist) 
+{
+# Sleep 2.5 seconds every 1 runs
+    if(++$UserCount % 1 -eq 0) 
+    {
+        Start-Sleep -Milliseconds 2500
+    }
+Get-AzureADAuditSignInLogs -Filter "UserPrincipalName eq '$User'" -Top 1 | 
+    select CreatedDateTime, UserPrincipalName, IsInteractive, AppDisplayName, IpAddress, TokenIssuerType, @{Name = 'DeviceOS'; Expression = {$_.DeviceDetail.OperatingSystem}} | export-csv -NoTypeInformation -Append c:\exports\$filename
+}
