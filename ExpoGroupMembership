@@ -1,0 +1,4 @@
+# Larger Group
+get-adgroup group -Properties Member | Select-Object -Expand Member | Get-ADUser -Property Name | Select-Object samaccountname | export-csv group.txt
+# Normal Group
+get-adgroupmember group| select-object samaccountname | export-csv group.txt
