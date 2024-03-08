@@ -1,0 +1,34 @@
+#==============================================================================
+# Flip On/Off Scroll Lock every 4 minutes to ensure keyboard is "working"
+# Dont use if you're using Excell it messes with some features
+#==============================================================================
+
+$host.UI.RawUI.WindowTitle = "Keyboard Keep Alive - 4 Min"
+[Console]::SetWindowSize(50, 10)
+
+$format = "dddd MM/dd/yy hh:mm:ss tt"
+$start = $(Get-Date -Format $format)
+$previous = "N/A"
+
+$WShell = New-Object -com "Wscript.Shell"
+while ($true)
+{
+  Clear-Host
+  Echo "Keep-alive with Scroll Lock toggle..."
+  Write-Host
+  Write-Host "     Start:" $start
+  Write-Host "  Previous:" $previous
+  $previous = $(Get-Date -Format $format)
+  Write-Host "    Latest:" $previous
+  Write-Host
+  Echo "*** Make sure to lock system if you leave! ***"
+
+  #==============================================================================
+  #If you're getting a "null-valued" expression error, try "SCROLLLOCK" instead.
+  #==============================================================================
+  $WShell.sendkeys("{SCROLLLOCK}")
+  Start-Sleep -Milliseconds 100 #100 milliseconds == 1/10th seconds
+
+  $WShell.sendkeys("{SCROLLLOCK}")
+  Start-Sleep -Seconds 240 #240 seconds == 4 minutes * 60 seconds
+}
