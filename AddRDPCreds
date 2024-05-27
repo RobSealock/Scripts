@@ -2,17 +2,20 @@ Adding RDP credentials to a saved connection
 
 Option 1. Manually Adding
 
-1. Open the .rdp file in a text editor and look for promptcredentialonce:i:1 
-Change the last 1 to a 0
+1. Open the .rdp file in a text editor and look for promptcredentialonce:i:0 
+Change the last 0 to a 1
 
 2. Generate encrypted password using this PowerShell command:
-("MySecretPassword" | ConvertTo-SecureString -AsPlainText -Force) | ConvertFrom-SecureString;
+("*MySecretPassword*" | ConvertTo-SecureString -AsPlainText -Force) | ConvertFrom-SecureString;
 
 2B. cryptRDP5.exe yourpassword, found here https://github.com/jpawlowski/openvpn-als-applications/tree/master/adito-application-rdp-xplatform-embedded/src/windows
 2C. precanned ps1, https://github.com/RedAndBlueEraser/rdp-file-password-encryptor
 
 3. Add a line:
-password 51:b:StringFromStep2
+password 51:b:*StringFromStep2*
+
+4. Add a line:
+username:s:*Domain\User*
 
 Option 2. Change GP to allow for GUI add
 
