@@ -1,0 +1,24 @@
+###########################################################################
+# 27-May-24
+# Script to export AMAG data via PS1 to csv 
+# v0.1 Initial creation
+#
+###########################################################################
+# Ref; 9600-0458 Data Connect Manual (Standard) issue 9.1.0v1.PDF
+# pg 19 multiMAXExport \ DataExportTable
+###########################################################################
+# 
+#
+###########################################################################
+# Define Variables
+$ServerInstance = "localhost" # or "."
+$Database = "multiMAXExport"
+$TimeStart =  Get-Date -Format hh:mm
+$TodayDate = Get-Date -Format ddMMyyy
+$ExportFile = "AMAGExpo_" + $TodayDate + ".csv"
+# Define the query to select all data from DataExportTable
+$Query = "SELECT * FROM DataExportTable"
+#
+###########################################################################
+# Execute the query and export the data to a CSV file
+Invoke-Sqlcmd -ServerInstance $ServerInstance -TrustServerCertificate -Database $Database -Query $Query | Export-Csv $ExportFile -NoTypeInformation
