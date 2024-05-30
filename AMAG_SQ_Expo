@@ -7,7 +7,13 @@
 # Ref; 9600-0458 Data Connect Manual (Standard) issue 9.1.0v1.PDF
 # pg 19 multiMAXExport \ DataExportTable
 ###########################################################################
-# 
+# Download SQL Modules and import
+# cd "c:\Program Files\WindowsPowerShell\Modules"
+# md sqlserver
+# cd sqlserver
+# Invoke-WebRequest -Uri powershellgallery.com/api/v2/package/sqlserver -Out .\sqlserver.zip
+# Expand-Archive -LiteralPath .\sqlserver.zip -DestinationPath .\
+# Import-Module SqlServer
 #
 ###########################################################################
 # Define Variables
