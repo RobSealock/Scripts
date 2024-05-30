@@ -1,0 +1,350 @@
+###########################################################################
+# 30-May-24
+# Script to compair two exports, export changed rows and then normalize for import
+# Use export for Delta Loads into CCURE
+# v 0.4 (30-May-24) Added Export to filter Everyone to AccessType=Access Code
+# v 0.3 (30-May-24) Added bulk change to InactiveDateTime where gt than '2037-12-31 23:59' change to this date/time
+# v 0.2 (16-May-24) Bulk change of InactiveDateTime to 2037-12-31 23:59 if 2500-* was found on Active Cards, mapped to changes in Import2Export09.ps1
+# v 0.1 (14-May-24) Initial using Import2Export08.ps1 as base
+# rsealock
+#
+###########################################################################
+# Current Time
+$TimeStart =  Get-Date -Format hh:mm
+$TodayDate = Get-Date -Format ddMMyyy
+#
+# Prompt for import file name
+$FileName1 = Read-Host -Prompt "Enter Previous File Name"
+$FileName2 = Read-Host -Prompt "Enter Current File Name"
+#
+Write-Host "Starting Import and delta separation at $TimeStart"
+###########################################################################
+# compair two exports and save only changed lines
+$file1 = import-csv .\$FileName1
+$file2 = import-csv .\$FileName2
+# $columnHeaders = $File2[0].psobject.properties.name
+$Data1 = $file1 | Select-Object CardID,CustomerCodeNumber,CardNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,PersonalDataItem,PersonalDataTitle,AccessType,Description,TimeCodeName,UserPermission, NoteText
+$Data2 = $file2 | Select-Object CardID,CustomerCodeNumber,CardNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,PersonalDataItem,PersonalDataTitle,AccessType,Description,TimeCodeName,UserPermission, NoteText
+$Delta = Compare-Object $Data1 $Data2 -Property CardID,CustomerCodeNumber,CardNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,PersonalDataItem,PersonalDataTitle,AccessType,Description,TimeCodeName,UserPermission, NoteText| Select-Object CardID,CustomerCodeNumber,CardNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,PersonalDataItem,PersonalDataTitle,AccessType,Description,TimeCodeName,UserPermission, NoteText
+# Write initial delta findings out if needed
+# $ExpoDelta = "Delta_" + $TodayDate + "_" + $FileName
+# $Delta | export-csv $ExpoDelta -notypeinformation
+Write-Host "Delta separation Complete"
+###########################################################################
+# Define file variables
+# $Import = import-csv $FileName
+$Dedup = "Dedup_Delta_" + $TodayDate + "_" + $FileName
+$ExpoCardAdmins = "CardAdmin_Delta_" + $TodayDate + ".csv"
+$ExpoEveryOne = "EveryOne_Delta_" + $TodayDate + ".csv"
+$ExpoEveryOne_AccessCode = "EveryOne_Delta_AccessCode_" + $TodayDate + ".csv"
+$ExpoSecurityGuards = "SecurityGuards_Delta_" + $TodayDate + ".csv"
+$ExpoBlanks = "Blanks_Delta_" + $TodayDate + ".csv"
+$ExpoAttributes =  "Attributes_Delta_" + $TodayDate + ".csv"
+$ExpoBandUsers = "BandUsers_Delta_" + $TodayDate + ".csv"
+#
+###########################################################################
+# Set variables for Normalization
+$Step1 = $Delta 
+Write-Host "Step 1/16 Removing Empty Rows"
+#
+###########################################################################
+# Remove empty rows
+$Step2 = $Step1 | Where-Object { $_.PSObject.Properties.Value -ne '' }
+Write-Host "Step 2/16 Empty Rows Removed, Separating NoteText Data"
+#
+#
+# Remove alpha rows from CardID - normalize bad data export
+$Step3 = $Step2 | Where-Object { $_.CardID -notlike "[a-zA-Z]*"}
+Write-Host "Step 3/16 Alpha Data Removed From Card Info"
+#
+###########################################################################
+# Change Inactive data to T/F, replace Inactive Period, check for InactiveDateTime where gt than '2037-12-31 23:59' change to this date/time
+$Step4 = Foreach ($Entry in $Step3) {
+    Switch ($Entry."Inactive") {
+        1 {$Entry."Inactive" = "True"}
+        0 {$Entry."Inactive" = "False"}
+}
+$Entry # Pass the modified object through
+}
+#
+$Step5 = Foreach ($Entry in $Step4) {
+    Switch ($Entry."Lost") {
+        1 {$Entry."Lost" = "True"}
+        0 {$Entry."Lost" = "False"}
+}
+$Entry # Pass the modified object through
+}
+#
+$Step5 | ForEach-Object {
+    if ($_.Inactive -eq 'FALSE' -and $_.InactiveDateTime -eq '2500-12-31 23:59') {
+        $_.InactiveDateTime = '2037-12-31 23:59'
+    }
+	}
+#
+foreach ($row in $Step5) {
+    $InactiveDateTime = [datetime]$row.InactiveDateTime
+    $targetDateTime = [datetime]'2037-12-31 23:59'
+
+    if ($InactiveDateTime -gt $targetDateTime) {
+        $row.InactiveDateTime = $targetDateTime
+    }
+}
+#
+Write-Host "Step 4/16 Substituing T/F and replace Inactive DateTime Complete"
+#
+###########################################################################
+# Remove duplicates and export out
+$Step6 = $Step5|Group-Object CardID,CustomerCodeNumber,CardNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,AccessType,Description,TimeCodeName,UserPermission |ForEach-Object {
+  # grab only the first record from each group
+  $_.Group |Select-Object -First 1
+}
+# Export check file
+#$Step6 |Export-Csv .\$Dedup -NoTypeInformation
+#
+Write-Host "Step 5/16 Data Normalization and Deduplication complete"
+# Write-Host "See $Dedup file."
+Write-Host "Starting Group Separation"
+#
+###########################################################################
+# Separation of data into Everyone and other Permission types, export out
+$CardAdmin = $Step6 | Where-Object { $_.UserPermission -like "Card Admin"}
+$Everyone = $Step6 | Where-Object { $_.UserPermission -like "Everyone"}
+$SecurityGuard = $Step6 | Where-Object { $_.UserPermission -like "Security Guard"}
+$Blanks = $Step6 | Where-Object { $_.UserPermission -like ""}
+$Everyone_AccessCode = $Everyone | Where-Object { $_.AccessType -eq 'Access Code' }
+#
+$CardAdmin | Export-Csv .\$ExpoCardAdmins -NoTypeInformation
+$Everyone | Export-Csv .\$ExpoEveryOne -NoTypeInformation
+$Everyone_AccessCode | Export-Csv .\$ExpoEveryOne_AccessCode -NoTypeInformation
+$SecurityGuard | Export-Csv .\$ExpoSecurityGuards -NoTypeInformation
+$Blanks | Export-Csv .\$ExpoBlanks -NoTypeInformation
+#
+#
+Write-Host "Step 6/16 Group Separataion is complete for EveryOne, EveryOne_AccessCode, CardAdmins, SecurityGuards and No Access Users."
+Write-Host "Starting Attribute export"
+#
+###########################################################################
+# Save output for later
+$Step5Org = $Step5
+#
+# Add the new columns  with empty values
+foreach ($row in $Step5Org) {
+    $row | Add-Member -MemberType NoteProperty -Name "CardUpdated2023" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "CardIssuer" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "Company" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "Department" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "EmployeeType" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "Location" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "OrientationExpirDate" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "Sponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "HLUSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "PipelineSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "HLRSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "HPLSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "OCCSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "ProductionWHSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "RescueSquad" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "PersonalPhoneNum" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "OCCLabSponsor" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "FitnessField" -Value ""
+}
+#
+#
+Write-Host "Step 7/16 Adding Columns Complete"
+#
+###########################################################################
+# Loop through each row and copy out to matched column data
+foreach ($row in $Step5Org) {
+    if ($row.PersonalDataTitle -like "2023 Card Updated") {
+        $row.CardUpdated2023 = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Card Issuer") {
+        $row.CardIssuer = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Company") {
+        $row.Company = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Department") {
+        $row.Department = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Employee Type") {
+        $row.EmployeeType = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Location") {
+        $row.Location = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Orientation Expiry Date") {
+        $row.OrientationExpirDate = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Sponsor") {
+        $row.Sponsor = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "HLU Sponsor") {
+        $row.HLUSponsor = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Pipeline Sponsor") {
+        $row.PipelineSponsor = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "HLR Sponsor") {
+        $row.HLRSponsor= $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "HPL Sponsor") {
+        $row.HPLSponsor= $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "OCC Sponsor") {
+        $row.OCCSponsor = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Production W/H Sponsor") {
+        $row.ProductionWHSponsor = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Rescue Squad") {
+        $row.RescueSquad = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Personal  phone #") {
+        $row.PersonalPhoneNum = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "OCC Lab Sponsor") {
+        $row.OCCLabSponsor = $row.PersonalDataItem
+    }
+    elseif ($row.PersonalDataTitle -eq "Fitness Field") {
+        $row.FitnessField = $row.PersonalDataItem
+    }
+}
+#
+#
+Write-Host "Step 8/16 Moving Data to Columns Complete"
+#
+###########################################################################
+# Remove the PersonalDataItem and PersonalDataTitle columns 
+#
+$Step5Org2 = $Step5Org | select CardNumber,CardUpdated2023,CardIssuer,Company,Department,EmployeeType,Location,OrientationExpirDate,Sponsor,HLUSponsor,PipelineSponsor,HLRSponsor,HPLSponsor,OCCSponsor,ProductionWHSponsor,RescueSquad,PersonalPhoneNum,OCCLabSponsor,FitnessField,FirstName,LastName,Inactive
+#
+#
+Write-Host "Step 9/16 Data Normalization Complete"
+#
+##########################################################################
+# Group by CardNumber and select unique groups
+$uniqueCardNumGroups = $Step5Org2 | Group-Object -Property { $_.CardNumber } | Where-Object { $_.Count -gt 0 }
+
+# Create a new CSV with consolidated data
+$Step5OrgConsolidatedData = $uniqueCardNumGroups | ForEach-Object {
+    $cardNumber = $_.Name
+    $Attribute = $_.Group | Select-Object -Property CardUpdated2023,CardIssuer,Company,Department,EmployeeType,Location,OrientationExpirDate,Sponsor,HLUSponsor,PipelineSponsor,HLRSponsor,HPLSponsor,OCCSponsor,ProductionWHSponsor,RescueSquad,PersonalPhoneNum,OCCLabSponsor,FitnessField,FirstName,LastName,Inactive
+
+    [PSCustomObject]@{
+        CardNumber = $cardNumber
+		FirstName = $Attribute.FirstName | Select-Object -Unique
+		LastName = $Attribute.LastName | Select-Object -Unique
+		Inactive = $Attribute.Inactive | Select-Object -Unique
+        CardUpdated2023 = $Attribute.CardUpdated2023 | Where-Object { $_ -ne '' } | Select-Object -Unique
+        CardIssuer = $Attribute.CardIssuer | Where-Object { $_ -ne '' } | Select-Object -Unique
+        Company = $Attribute.Company | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    Department = $Attribute.Department| Where-Object { $_ -ne '' } | Select-Object -Unique
+	    EmployeeType = $Attribute.EmployeeType | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    Location = $Attribute.Location | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    OrientationExpirDate = $Attribute.OrientationExpirDate | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    Sponsor = $Attribute.Sponsor| Where-Object { $_ -ne '' } | Select-Object -Unique
+	    HLUSponsor = $Attribute.HLUSponsor | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    PipelineSponsor = $Attribute.PipelineSponsor| Where-Object { $_ -ne '' } | Select-Object -Unique
+	    HLRSponsor = $Attribute.HLRSponsor| Where-Object { $_ -ne '' } | Select-Object -Unique
+	    HPLSponsor= $Attribute.HPLSponsor | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    OCCSponsor = $Attribute.OCCSponsor | Where-Object { $_ -ne '' } | Select-Object -Unique
+	    ProductionWHSponsor = $Attribute.ProductionWHSponsor | Where-Object { $_ -ne '' } | Select-Object -Unique	
+	    RescueSquad = $Attribute.RescueSquad| Where-Object { $_ -ne '' } | Select-Object -Unique	
+	    PersonalPhoneNum = $Attribute.PersonalPhoneNum | Where-Object { $_ -ne '' } | Select-Object -Unique	
+	    OCCLabSponsor = $Attribute.OCCLabSponsor| Where-Object { $_ -ne '' } | Select-Object -Unique	
+	    FitnessField = $Attribute.FitnessField| Where-Object { $_ -ne '' } | Select-Object -Unique			
+    }
+}
+###########################################################################
+# remove company equal to Cenovus or Husky * (exception is Husky Midstream)
+#
+#
+$Step5OrgConsolidatedDataSwap = $Step5OrgConsolidatedData | ForEach-Object {
+    if ($_.Company -like "Husky E*" -or $_.Company -like "Husky P*" -or $_.Company -like "Husky C*" -or $_.Company -like "Husky O*" -or $_.Company -like "Husky/*" -or $_.Company -like "Husky S*" -or $_.Company -like "Ceno*" -or $_.Company -like "cenv*") {
+        $_.Company = ""
+    }
+    $_  # Pass the modified object through
+}
+#
+$Step5OrgConsolidatedDataSwap | Export-Csv $ExpoAttributes -NoTypeInformation
+#
+Write-Host "Step 10/16 Attribute Export complete, See AttributeExpo for data."
+Write-Host "Step 11/16 Starting NoteText (Banded or Lost Card) Export"
+#
+###########################################################################
+# Import Limited Data Set
+$Step2Org = $Step2 | Select CardID,CardNumber,NoteText,CustomerCodeNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime
+#
+###########################################################################
+# Add the new columns  with empty values
+foreach ($row in $Step2Org) {
+    $row | Add-Member -MemberType NoteProperty -Name "NoteText2" -Value ""
+    $row | Add-Member -MemberType NoteProperty -Name "Justification" -Value ""	
+}
+Write-Host "Step 12/16 Import Complete, Adding Rows"
+#
+###########################################################################
+# Add the new columns  with empty values
+# Loop through each row to identify Note in the CardID column, copy to new cell on line above it
+for ($i = 1; $i -lt $Step2Org.Count; $i++) {
+    $currentRow = $Step2Org[$i]
+    $previousRow = $Step2Org[$i - 1]
+
+    # Check if CARDID contains alphabetic characters
+    if ($currentRow.CARDID -match "[a-zA-Z]") {
+        # Write data to the NoteText2 column in the row above
+        $previousRow.NoteText2 = $currentRow.CARDID
+    }
+}
+Write-Host "Step 13/16 Search for Notes Complete"
+#
+###########################################################################
+# Join the original NoteText cell to previous found CardID alpha value
+$Step2Org | ForEach-Object {
+    $_.Justification = $_.NoteText + ";" + $_.NoteText2
+}
+Write-Host "Step 14/16 Notes Joined"
+#
+###########################################################################
+# Remove alpha rows from CardID - normalize bad data export
+$Step2Org1 = $Step2Org | Where-Object { $_.CardID -notlike "[a-zA-Z]*"}
+#
+###########################################################################
+# Search for Joined Notes cell with greater than 144 characters and remove spackes " "
+foreach ($row in $Step2Org1) {
+    foreach ($column in $row.PSObject.Properties) {
+        # Check if the cell value has more than 144 characters
+        if ($column.Value.Length -gt 144) {
+            # Remove spaces from the cell value
+            $row.$($column.Name) = $column.Value -replace '\s', ''
+        }
+    }
+}
+Write-Host "Step 15/16 Cleaning Export Data"
+#
+###########################################################################
+# Data Cleanup, only look for rows with Notes in alpha format
+$Step2Org2 = $Step2Org1 | Where-Object { $_.Justification -like "[a-zA-Z]*"}
+#
+###########################################################################
+# Pre-sort data
+$Step2Org3 = $Step2Org2 | select CardID,CardNumber,CustomerCodeNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,Justification 
+#
+###########################################################################
+# Get unique values from data
+$Step2Org4 = $Step2Org3 |Group-Object CardID,CardNumber,CustomerCodeNumber,FirstName,LastName,Inactive,Lost,ActiveDateTime,InactiveDateTime,Justification |ForEach-Object {
+  $_.Group |Select-Object -First 1
+}
+#
+###########################################################################
+# Export and finish
+$Step2Org4 | Export-Csv $ExpoBandUsers -notypeinformation
+$TimeEnd =  Get-Date -Format hh:mm
+$TimeDiff = new-timespan -start $TimeStart -end $TimeEnd
+Write-Host "Step 16/16 All Exports Complete in $TimeDiff, see BandUsers.csv for NoteText Info"
+
+
+
+
+
