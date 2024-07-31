@@ -1,0 +1,64 @@
+https://stackoverflow.com/questions/75423366/zip-a-folder-of-files-into-multiple-stand-alone-zip-files-of-maximum-size
+
+
+$filesFolderPath = "Path of where the PDFs are"
+$archivePath = "Path to where the archive will be"
+
+$files = Get-ChildItem -Path $filesFolderPath -Recurse | Where-Object { $_.Extension -eq ".pdf" }
+$filesToArchive = @()
+$archiveSize = 0
+$counter = 0
+
+foreach ($file in $files) {
+    $fileSize = [Math]::Round(($file.Length / 1MB), 2)
+    
+    # Check if the combined size of the files to be archived exceeds 50 MB
+    if (($archiveSize + $fileSize) -gt 49) {
+        # Create the archive if the combined size exceeds 50 MB
+        $counter++
+        Compress-Archive -Path $filesToArchive.FullName -DestinationPath "$($archivePath)\Archive-$counter.zip"
+        $filesToArchive = @()
+        $archiveSize = 0
+    }
+
+    # Add the file to the list of files to be archived
+    $filesToArchive += $file
+    $archiveSize += $fileSize
+}
+
+# Create the final archive if there are any remaining files to be archived
+if ($filesToArchive.Count -gt 0) {
+    $counter++
+    Compress-Archive -Path $filesToArchive.FullName -DestinationPath "$($archivePath)\Archive-$counter.zip"
+}
+
+
+#7za.exe" a -v50m "Result.zip" "SourceFolder"
+
+foreach ($file in $files) {
+    $fileSize = [Math]::Round(($file.Length / 1MB), 2)
+    
+    # Check if the file is bigger than 49MB to archive it separately and write a warning
+    if ($fileSize -gt 49) {
+        $counter++
+        Compress-Archive -Path $file.FullName -DestinationPath "$($archivePath)\Archive-$counter.zip"
+        Write-Warning "The archive number '$($counter)' has a single file bigger than 50MB"
+    } else {
+            # Check if the combined size of the files to be archived exceeds 50 MB
+        if (($archiveSize + $fileSize) -gt 49) {
+            # Create the archive if the combined size exceeds 50 MB
+            $counter++
+            Compress-Archive -Path $filesToArchive.FullName -DestinationPath "$($archivePath)\Archive-$counter.zip"
+            $filesToArchive = @()
+            $archiveSize = 0
+        }
+
+        # Add the file to the list of files to be archived
+        $filesToArchive += $file
+        $archiveSize += $fileSize
+    }
+}
+
+# zip -s 50m new.zip big.iso
+# zip -s 3g new.zip big.iso
+# zip existing.zip --out new.zip -s 50m
