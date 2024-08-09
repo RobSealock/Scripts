@@ -5,6 +5,7 @@
 
 $host.UI.RawUI.WindowTitle = "Keyboard Keep Alive - 4 Min"
 [Console]::SetWindowSize(50, 10)
+#lost screen resize with tab powershell, no way to do this (yet)
 
 $format = "dddd MM/dd/yy hh:mm:ss tt"
 $start = $(Get-Date -Format $format)
