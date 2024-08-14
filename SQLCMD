@@ -1,0 +1,41 @@
+SQL DEV Restore BAK files
+
+Note: Add Everyone to BAK files perms
+
+1> ALTER LOGIN [sa] with PASSWORD = ‘Password'
+2~ go
+
+SQL Server Management Studio
+https://learn.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms?view=sql-server-ver16
+SQL Server Dev Ed
+https://www.microsoft.com/en-us/sql-server/sql-server-downloads?msockid=2be7ad1059b3693d1a4bb963589e6829
+
+
+1> Create Database AccessControl
+2> Go
+
+1> RESTORE DATABASE AccessControl FROM DISK='C:\Shared\AccessControl_1_Full_Wed_Jul_31_16_16_23_2024.bak',DISK='C:\Shared\AccessControl_2_Full_Wed_Jul_31_16_16_23_2024.bak' WITH REPLACE
+2> GO
+
+1> Create Database Aurora
+2> Go
+
+
+RESTORE DATABASE Aurora FROM DISK='C:\Shared\AuroraDatabaseFullBackup2024-06-25_1355.bak' WITH MOVE 'AURORA' TO 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Aurora.mdf', MOVE 'AURORA_log' TO 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\Aurora_log.ldf', REPLACE
+
+
+SELECT
+    db.name AS DBName,
+    (select mf.Physical_Name FROM sys.master_files mf where mf.type_desc = 'ROWS' and db.database_id = mf.database_id ) as DataFile,
+    (select mf.Physical_Name FROM sys.master_files mf where mf.type_desc = 'LOG' and db.database_id = mf.database_id ) as LogFile
+FROM sys.databases db WHERE db.database_id > 4
+
+
+
+--Search DB for Column headers
+USE Aurora;  -- Replace with your actual database name
+
+SELECT COLUMN_NAME, TABLE_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'dbo'  -- Adjust schema if needed
+  AND COLUMN_NAME LIKE '%card%';
