@@ -1,0 +1,2 @@
+Split Zip File
+Zip Existing.zip --out New.zip -s 1g
