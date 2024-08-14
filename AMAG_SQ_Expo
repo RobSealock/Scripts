@@ -1,30 +1,91 @@
 ###########################################################################
-# 27-May-24
-# Script to export AMAG data via PS1 to csv 
+# 27-July-24
+# Script to export CCURE data via PS1 to csv 
 # v0.1 Initial creation
 #
 ###########################################################################
-# Ref; 9600-0458 Data Connect Manual (Standard) issue 9.1.0v1.PDF
-# pg 19 multiMAXExport \ DataExportTable
+# Section 1. Creat Folder Structure and Cleanup after 7 Days
+# Change TargetFolder Path Variable
+# Go to Section 2
 ###########################################################################
-# Download SQL Modules and import
-# cd "c:\Program Files\WindowsPowerShell\Modules"
-# md sqlserver
-# cd sqlserver
-# Invoke-WebRequest -Uri powershellgallery.com/api/v2/package/sqlserver -Out .\sqlserver.zip
-# Expand-Archive -LiteralPath .\sqlserver.zip -DestinationPath .\
-# Import-Module SqlServer
 #
-###########################################################################
-# Define Variables
-$ServerInstance = "localhost" # or "."
-$Database = "multiMAXExport"
+
+# Define Time / Date variables
 $TimeStart =  Get-Date -Format hh:mm
 $TodayDate = Get-Date -Format ddMMyyy
-$ExportFile = "AMAGExpo_" + $TodayDate + ".csv"
+
+# Specify the target folder path
+$TargetFolder = "C:\PathToTargetFolder"
+
+# Testing 
+#$TargetFolder = "C:\Temp\Test"
+
+# Check if the folder exists; if not, create it
+if (-not (Test-Path -Path $TargetFolder -PathType Container)) {
+    New-Item -Path $TargetFolder -ItemType Directory
+    Write-Host "Created folder: TARGET"
+}
+
+# Get files older than 7 days
+$OldFilesToMove = Get-ChildItem -Path $TargetFolder | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) }
+
+# Create the "old" subfolder if needed
+$OldSubfolder = Join-Path -Path $TargetFolder -ChildPath "OLD"
+if (-not (Test-Path -Path $OldSubfolder -PathType Container)) {
+    New-Item -Path $OldSubfolder -ItemType Directory
+    Write-Host "Created subfolder: OLD"
+}
+
+# Create a folder to hold Old Files to Move
+$TodaysSubfolder = Join-Path -Path $OldSubfolder -ChildPath $TodayDate 
+if (-not (Test-Path -Path $TodaysSubfolder -PathType Container)) {
+    New-Item -Path $TodaysSubfolder  -ItemType Directory
+    Write-Host "Created subfolder: $TodayDate"
+}
+$TodayDate
+
+# Initialize a log file path
+$logFilePath = Join-Path -Path $OldSubfolder -ChildPath "Moved_Files_log.txt"
+
+# Move older files to the "OLD" subfolder
+$OldFilesToMove | ForEach-Object {
+    Move-Item -Path $_.FullName -Destination $TodaysSubfolder
+    Add-Content -Path $logFilePath -Value "$TodayDate - Moved file: $($_.Name)"
+}
+
+# Compress the "Old" subfolder
+Compress-Archive -Path $TodaysSubfolder -DestinationPath "$OldSubfolder\$TodayDate.zip"
+Add-Content -Path $logFilePath -Value "$TodayDate - Compression complete $TodayDate.zip Created"
+
+# Cleanup; removes Files with exception of powershell and Zip
+Get-ChildItem -Exclude *.ps1, *.zip, Moved_Files_log.txt -path $OldSubfolder | Remove-Item  -Force
+
+#
+###########################################################################
+# Section 2. Database Export via query
+# Change Database and Query Variables
+# Go to End
+###########################################################################
+# SQL PS Modules are required, these can be added using the following
+# Invoke-WebRequest -Uri powershellgallery.com/api/v2/package/sqlserver -Out C:\temp\sqlserver.zip
+# "c:\Program Files\WindowsPowerShell\Modules" md SQLServer
+# Import-Module SqlServer
+###########################################################################
+#
+
+$ServerInstance = "localhost" # or "."
+$Database = "DataBaseNameHere"
+$ExportFile = $TargetFolder  + "\CCURE_" + $TodayDate + ".csv"
 # Define the query to select all data from DataExportTable
-$Query = "SELECT * FROM DataExportTable"
+$Query = "SELECT * FROM *"
 #
 ###########################################################################
 # Execute the query and export the data to a CSV file
 Invoke-Sqlcmd -ServerInstance $ServerInstance -TrustServerCertificate -Database $Database -Query $Query | Export-Csv $ExportFile -NoTypeInformation
+Add-Content -Path $logFilePath -Value "$TodayDate - SQL Export Completed"
+
+#
+###########################################################################
+# End
+###########################################################################
+#
