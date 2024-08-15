@@ -1,0 +1,4 @@
+cmd /V /C "set "IP=10.64.6.162" & FOR /L %i in (1,1,2) do @ping -n 1 -w 1000 "!IP!" >NUL & arp -a | findstr /c:"!IP! "
+
+Loop using txt file of IP Addresses
+FOR /F %i in (IP_MAC_Needed.txt) do cmd /V /C "set "IP=%i" & FOR /L %j in (1,1,2) do @ping -n 1 -w 1000 "!IP!" >NUL & arp -a | findstr /c:"!IP! "
