@@ -1,0 +1,46 @@
+# Script to uninstall apps
+# This will work for 32 and 64bit apps
+# Define variables
+$LogFolder = "C:\Scripts\Logs"
+$LogFile = "$LogFolder\KillApp.log"
+
+
+# Check if the log folder exists, if not, create it
+if (!(Test-Path -Path $LogFolder)) {
+    New-Item -ItemType Directory -Path $LogFolder
+}
+
+# Initialize an array for logs
+$LogEntries = @()
+
+# Search for apps to uninstall
+$Patterns = @('TightV*', 'firefox*')
+
+foreach ($Pattern in $Patterns) {
+    # Get apps matching pattern
+    $KillApp = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like $Pattern }
+
+    if ($KillApp) {
+        foreach ($app in $KillApp) {
+            Write-Host "Uninstalling: $($app.Name)"
+            $app.Uninstall()
+            # Add uninstall details to the log entries array
+            $LogEntries += "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Uninstalled: $($app.Name)"
+        }
+    } else {
+        # Write-Host "No applications matching the pattern '$Pattern' found."
+    }
+}
+
+# Add a log entry if no apps were uninstalled
+if ($UninstalledAppsCount -eq 0) {
+    $LogEntries += "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Script ran but no applications were uninstalled."
+    # Write-Host "No applications were uninstalled. Log entry added."
+}
+
+# Add log entries for apps that were uninstalled
+if ($LogEntries.Count -gt 0) {
+    $LogEntries | Out-File -FilePath $LogFile -Append
+    # Write-Host "Uninstall log has been written to $LogFile"
+}
+#end
