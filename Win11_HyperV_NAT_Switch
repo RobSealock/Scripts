@@ -1,0 +1,10 @@
+Windows 11 Hyper-V allows native network address translation (NAT) for a virtual network.
+The default switch changes IP/Subnet after each reboot.
+Creation of a custom switch/NAT can be used in HyperV.
+https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/setup-nat-network
+
+New-VMSwitch -SwitchName "HyperVNAT" -SwitchType Internal 
+Get-NetAdapter
+(note InterfaceIndex #)
+New-NetIPAddress -IPAddress 172.26.27.1 -PrefixLength 24 -InterfaceIndex 53
+New-NetNat -Name HyperVNAT -InternalIPInterfaceAddressPrefix 172.26.27.0/24 
